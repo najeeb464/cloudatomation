@@ -1,7 +1,7 @@
 from boto3 import Session
-# najeebshah052
+import json
 class AwsService:
-    def __init__(self,access_key,secret_access_key,region_name):
+    def __init__(self,access_key,secret_access_key,region_name=None):
         self.session=Session(aws_access_key_id=access_key,aws_secret_access_key=secret_access_key,region_name=region_name)
         self.profile_name=self.session.profile_name
         self.region_name=self.session.region_name if self.session.region_name else region_name
@@ -13,7 +13,7 @@ class AwsService:
     
     
     def list_user_account(self):
-        client =  self.session.client('iam')
+        client =  self.session.client('iam',region_name=self.region_name)
         response = client.list_users()
         return response
     
@@ -118,3 +118,31 @@ class AwsService:
         for i in response.get('DBInstances',[]):
             response_data.append(i)
         return response_data
+
+    def ec2_list(self):
+        ess=self.session.client("ec2")
+        all_regions=ess.describe_regions()
+        list_region=[]
+        response_data=[]
+        for each_region in all_regions["Regions"]:
+            list_region.append(each_region["RegionName"])
+        for instance in ess.describe_instances()["Reservations"]:
+            for each_in in instance["Instances"]:
+                response_data.append(each_in)
+
+        # for each_region in list_region:
+        #     resource= self.session.resource("ec2",region_name=each_region)
+        #     for each_instance in resource.instances.all():
+        #         print("each_instance",each_instance)
+        #         response_data.append({"Id":each_instance.id})
+        # client_=self.session.client("ec2",region_name=each_region)
+        # for each in client_.describe_instances()["Reservations"]:
+        #     for each_in in each["Instances"]:
+        #         print("each_in",each_in)
+        #     print("instanceId",each_in["InstanceId"],each_in["State"]["Name"])
+        return response_data
+
+    def ec2_detail(self,instanceId):
+        ess=self.session.client("ec2")
+        ess.describe_instances(InstanceIds=[instanceId])
+        return

@@ -72,3 +72,12 @@ class RDSDetailView(APIView):
         return Response(data)
         
 
+class EC2ListView(APIView):
+    def get(self, request,*args,**kwargs):
+        items = AccountConfiguration.objects.all()
+        data=[]
+        for item in items:
+            s=AwsService(access_key=item.access_key,secret_access_key=item.secret_access_key,region_name="us-east-1")
+            data.append({"profile_name":item.profile_name,
+                "ec2_list":s.ec2_list()})
+        return Response(data)
