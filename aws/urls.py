@@ -5,10 +5,10 @@ router = SimpleRouter()
 router.register(r'account/configure', AccountConfigurationView)
 urlpatterns = [
     path('user/profile',UserProfileView.as_view()),
-    path('s3/',S3ListView.as_view(),name="s3_list"),
-    path("s3/<bucket_name>/objects/",S3ObjectListView.as_view(),name="s3_object_list"),
-    path('rds/',RDSListView.as_view()),
-    path('rds/<instance_arn>/',RDSDetailView.as_view()),
-    path('ec2/',EC2ListView.as_view()),
+    path('<account_id>/s3/',S3ListView.as_view(),name="s3_list"),
+    path("<account_id>/s3/<bucket_name>/objects/",S3ObjectListView.as_view(),name="s3_object_list"),
+    path('<account_id>/rds/',RDSListView.as_view()),
+    path('<account_id>/rds/<instance_arn>/',RDSDetailView.as_view()),
+    path('<account_id>/ec2/',EC2ListView.as_view()),
 
 ]+router.urls

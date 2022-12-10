@@ -1,18 +1,27 @@
 from rest_framework import serializers
 from aws.models import AccountConfiguration
 from aws.service import AwsService
+
+
+# Access 
+# AKIAUXMC7CKZO7ZV6L7M
+#Secret
+#Xx19wVH70rYHKnWRNMUlHFSXR413O7QDADJLXD7r
 class AccountConfigurationSerializer(serializers.ModelSerializer):
     class Meta:
         model=AccountConfiguration
-        fields=['id','profile_name','region_name','available_profiles',"access_key","secret_access_key"]
+        fields=['id','user_name','region_name','arn',"user_id","access_key","secret_access_key"]
     
     def validate(self, attrs):
         attrs=super().validate(attrs)
         access_key=attrs.get('access_key')
         secret_access_key=attrs.get('secret_access_key')
         service=AwsService(access_key=access_key,secret_access_key=secret_access_key)
-        attrs["profile_name"]=service.profile_name
-        attrs["region_name"]=service.region_name
+        user=service.get_user_detail()
+        attrs["user_name"]=user.get("user_name","")
+        attrs["arn"]=user.get("arn","")
+        attrs["user_id"]=user.get("user_id","")
+        # attrs["region_name"]=user.region_name
         return attrs
 
 

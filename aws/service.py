@@ -1,16 +1,27 @@
 from boto3 import Session
 import json
+import base64
+from PIL import Image
+# from StringIO import StringIO
+import io
 class AwsService:
     def __init__(self,access_key,secret_access_key,region_name=None):
         self.session=Session(aws_access_key_id=access_key,aws_secret_access_key=secret_access_key,region_name=region_name)
-        self.profile_name=self.session.profile_name
+        self.iam =self.session.resource('iam').CurrentUser()
+        self.profile_name=self.iam.user_name
         self.region_name=self.session.region_name if self.session.region_name else region_name
     
     @property
     def session_info(self):
         return self.session
     
-    
+    def get_user_detail(self):
+        data={
+            "user_name":self.iam.user_name,
+            "user_id":self.iam.user_id,
+            "arn":self.iam.arn
+            }
+        return data
     
     def list_user_account(self):
         client =  self.session.client('iam',region_name=self.region_name)
@@ -32,6 +43,7 @@ class AwsService:
         for x in response['Users']:
             _user_li.append(x['UserName'])
         return _user_li
+   
     
     def list_s3(self):
         s3_client =  self.session.client('s3')
@@ -45,6 +57,28 @@ class AwsService:
             print("Couldn't get buckets.",ex)
             pass
         return buckets
+
+    def s3_stats(self,bucket_list):
+        rs=self.session.resource('s3')
+        bucket_stats=[]
+        data={}
+        if len(bucket_list)==0:
+            s3_list=self.list_s3()
+        else:
+            s3_list=bucket_list
+        data["count"]=len(s3_list)
+        for i in s3_list:
+            count=0
+            size=0
+            all_object=rs.Bucket(i["Name"]).objects.all()
+            for obj in all_object:
+                size+=obj.size
+                count+=1
+            inner_data={"bucket_name":i["Name"],"objects_count":count,"object_size":size}
+            bucket_stats.append(inner_data)
+        data["buckets"]=[]
+        data["buckets"].append(bucket_stats)
+        return data
 
     def S3_bucket_objects_detail(self,bucket_name):
         s3_client=self.session.client("s3")
@@ -119,16 +153,37 @@ class AwsService:
             response_data.append(i)
         return response_data
 
+    def instance_output_format(self,instance_data):
+        response={
+        "InstanceId":instance_data["InstanceId"],
+        "InstanceType":instance_data["InstanceType"],
+        "State":instance_data["State"]["Name"],
+        "PrivateIpAddress":instance_data["PrivateIpAddress"],
+        "PublicIpAddress":instance_data["PublicIpAddress"],
+        "SecurityGroups":instance_data["SecurityGroups"],
+        }
+        return response
+
+    def rds_image(self):
+        rds = '{"metrics": [["AWS/RDS", "CPUUtilization"]]}'
+        client = self.session.client('cloudwatch')
+        response = client.get_metric_widget_image(MetricWidget=rds)
+        # return response["MetricWidgetImage"]
+        bytes_data=io.BytesIO(response["MetricWidgetImage"])
+        fr=base64.b64encode(bytes_data.getvalue())
+        
+        # im = Image.open(bytes_data)
+        return fr
     def ec2_list(self):
         ess=self.session.client("ec2")
         all_regions=ess.describe_regions()
         list_region=[]
         response_data=[]
-        for each_region in all_regions["Regions"]:
-            list_region.append(each_region["RegionName"])
+        # for each_region in all_regions["Regions"]:
+        #     list_region.append(each_region["RegionName"])
         for instance in ess.describe_instances()["Reservations"]:
             for each_in in instance["Instances"]:
-                response_data.append(each_in)
+                response_data.append(self.instance_output_format(each_in))
 
         # for each_region in list_region:
         #     resource= self.session.resource("ec2",region_name=each_region)
@@ -141,6 +196,32 @@ class AwsService:
         #         print("each_in",each_in)
         #     print("instanceId",each_in["InstanceId"],each_in["State"]["Name"])
         return response_data
+    
+    def ec2_runing_instance(self):
+        ess=self.session.resource("ec2")
+        filters = [{
+                'Name': 'instance-state-name', 
+                'Values': ['running']
+                 }
+                ]
+        instances = ess.instances.filter(Filters=filters)
+        RunningInstances = []
+        for instance in instances:
+            RunningInstances.append(instance.id)
+        return RunningInstances
+        
+    def ec2_graph(self):
+        client = self.session.client('cloudwatch')
+        json = '{"metrics": [["AWS/EC2", "CPUUtilization", "InstanceId", \
+                      "i-0f9b0d57300e87d3c"]]}'
+        response = client.get_metric_widget_image(MetricWidget=json)
+        bytes_data=io.BytesIO(response["MetricWidgetImage"])
+        fr=base64.b64encode(bytes_data.getvalue())
+        # im = Image.open(io.BytesIO(response["MetricWidgetImage"]))
+        # im.save("cw-1.png")
+        return fr
+
+
 
     def ec2_detail(self,instanceId):
         ess=self.session.client("ec2")
