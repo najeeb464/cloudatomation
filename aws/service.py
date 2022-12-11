@@ -222,6 +222,21 @@ class AwsService:
         return fr
 
 
+    def stop_ec2(self,ec2_instance):
+        ec2 = self.session.resource('ec2')
+        try:
+            ec2.Instance(ec2_instance).stop()
+        except:
+            return False
+        return True
+    def start_ec2(self,ec2_instance):
+        ec2 = self.session.resource('ec2')
+        try:
+            ec2.Instance(ec2_instance).start()
+        except:
+            return False
+        return True
+
 
     def ec2_detail(self,instanceId):
         ess=self.session.client("ec2")

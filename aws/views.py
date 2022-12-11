@@ -101,6 +101,76 @@ class EC2ListView(APIView):
             return Response({"error":"Invalid Account Configure"},status=status.HTTP_400_BAD_REQUEST)
         data=[]
         s=AwsService(access_key=item.access_key,secret_access_key=item.secret_access_key,region_name="us-east-1")
-        data.append({"profile_name":item.profile_name,
+        data.append({"profile_name":item.user_name,
             "ec2_list":s.ec2_list(),"image":s.ec2_graph()})
+        return Response(data)
+class EC2Stop(APIView):
+    def get(self, request,*args,**kwargs):
+        account_id=kwargs.get("account_id",None)
+        instance_id=kwargs.get("instance_id",None)
+        try:
+            item = AccountConfiguration.objects.get(id=account_id)
+        except Exception as ex:
+            return Response({"error":"Invalid Account Configure"},status=status.HTTP_400_BAD_REQUEST)
+        data=[]
+        s=AwsService(access_key=item.access_key,secret_access_key=item.secret_access_key,region_name="us-east-1")
+        flag=s.stop_ec2(ec2_instance=instance_id)
+        if flag:
+            return Response({"flag":True},status=status.HTTP_200_OK)
+        else:
+            return Response({"flag":False},status=status.HTTP_400_BAD_REQUEST)
+
+class EC2Start(APIView):
+    def get(self, request,*args,**kwargs):
+        account_id=kwargs.get("account_id",None)
+        instance_id=kwargs.get("instance_id",None)
+        try:
+            item = AccountConfiguration.objects.get(id=account_id)
+        except Exception as ex:
+            return Response({"error":"Invalid Account Configure"},status=status.HTTP_400_BAD_REQUEST)
+        data=[]
+        s=AwsService(access_key=item.access_key,secret_access_key=item.secret_access_key,region_name="us-east-1")
+        flag=s.start_ec2(ec2_instance=instance_id)
+        if flag:
+            return Response({"flag":True},status=status.HTTP_200_OK)
+        else:
+            return Response({"flag":False},status=status.HTTP_400_BAD_REQUEST)
+
+class EC2GraphView(APIView):
+    def get(self, request,*args,**kwargs):
+        account_id=kwargs.get("account_id",None)
+        try:
+            item = AccountConfiguration.objects.get(id=account_id)
+        except Exception as ex:
+            return Response({"error":"Invalid Account Configure"},status=status.HTTP_400_BAD_REQUEST)
+        data=[]
+        s=AwsService(access_key=item.access_key,secret_access_key=item.secret_access_key,region_name="us-east-1")
+        data.append({"profile_name":item.user_name,
+        "image":s.ec2_graph()})
+        return Response(data)
+
+class RDSGraphView(APIView):
+    def get(self, request,*args,**kwargs):
+        account_id=kwargs.get("account_id",None)
+        try:
+            item = AccountConfiguration.objects.get(id=account_id)
+        except Exception as ex:
+            return Response({"error":"Invalid Account Configure"},status=status.HTTP_400_BAD_REQUEST)
+        data=[]
+        s=AwsService(access_key=item.access_key,secret_access_key=item.secret_access_key,region_name="us-east-1")
+        data.append({"profile_name":item.user_name,
+        "image":s.rds_image()})
+        return Response(data)
+
+class S3StatsView(APIView):
+    def get(self, request,*args,**kwargs):
+        account_id=kwargs.get("account_id",None)
+        try:
+            item = AccountConfiguration.objects.get(id=account_id)
+        except Exception as ex:
+            return Response({"error":"Invalid Account Configure"},status=status.HTTP_400_BAD_REQUEST)
+        data=[]
+        s=AwsService(access_key=item.access_key,secret_access_key=item.secret_access_key,region_name="us-east-1")
+        data.append({"profile_name":item.user_name,
+        "stast":s.s3_stats()})
         return Response(data)
