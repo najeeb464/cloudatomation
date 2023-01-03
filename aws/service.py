@@ -32,9 +32,6 @@ class AwsService:
         response=self.list_user_account()
         data=[]
         return response['Users']
-        # for x in response['Users']:
-        #     data.append({"user_id":x["UserId"],"":x[''],"":x['']})
-
             
 
     def render_list_user_account(self):
@@ -50,15 +47,15 @@ class AwsService:
         buckets =[]
         try:
             response = s3_client.list_buckets()
+            print("response",response['Buckets'])
             
             for bucket in response['Buckets']:
                 buckets.append(bucket)
         except Exception as ex:
-            print("Couldn't get buckets.",ex)
             pass
         return buckets
 
-    def s3_stats(self,bucket_list):
+    def s3_stats(self,bucket_list=[]):
         rs=self.session.resource('s3')
         bucket_stats=[]
         data={}
@@ -76,8 +73,7 @@ class AwsService:
                 count+=1
             inner_data={"bucket_name":i["Name"],"objects_count":count,"object_size":size}
             bucket_stats.append(inner_data)
-        data["buckets"]=[]
-        data["buckets"].append(bucket_stats)
+        data["buckets"]=bucket_stats
         return data
 
     def S3_bucket_objects_detail(self,bucket_name):
@@ -88,14 +84,12 @@ class AwsService:
             for obj in your_bucket['Contents']:
                 response_data.append(obj)
         except Exception as ex:
-            print("ex")
             pass
         return response_data
     def list_rds_all_region(self):
         response_data=[]
         try:
             available_regions = self.session.get_available_regions('rds')
-            print("available_regions",available_regions)
             for region in available_regions:
                 client = self.session.client('rds',region_name=region)
                 response = client.describe_db_instances()
@@ -113,19 +107,16 @@ class AwsService:
                         "DBInstanceStatus":i["DBInstanceStatus"]
                     })
                     except Exception as ex:
-                        print("exception",ex)
                         continue
                         pass
                 return response_data
         except Exception as ex:
-            print("exception",ex)
             pass
         return response_data
     def list_rds(self):
         response_data=[]
      
         available_regions = self.session.get_available_regions('rds')
-        print("available_regions",available_regions)
         client = self.session.client('rds')
         response = client.describe_db_instances()
         for i in response['DBInstances']:
@@ -137,10 +128,10 @@ class AwsService:
                 "Engine":i["Engine"],
                 "AvailabilityZone":i["AvailabilityZone"],
                 "DBInstanceArn":i["DBInstanceArn"],
-                "DBInstanceStatus":i["DBInstanceStatus"]
+                "DBInstanceStatus":i["DBInstanceStatus"],
+                "MasterUsername":i["MasterUsername"]
             })
             except Exception as ex:
-                print("exception",ex)
                 continue
                 pass
         return response_data
@@ -155,17 +146,24 @@ class AwsService:
 
     def instance_output_format(self,instance_data):
         response={
-        "InstanceId":instance_data["InstanceId"],
-        "InstanceType":instance_data["InstanceType"],
+        "InstanceId":instance_data.get("InstanceId",''),
+        "InstanceType":instance_data.get("InstanceType",""),
         "State":instance_data["State"]["Name"],
-        "PrivateIpAddress":instance_data["PrivateIpAddress"],
-        "PublicIpAddress":instance_data["PublicIpAddress"],
-        "SecurityGroups":instance_data["SecurityGroups"],
+        "PrivateIpAddress":instance_data.get("PrivateIpAddress",""),
+        "PublicIpAddress":instance_data.get("PublicIpAddress",""),
+        "SecurityGroups":instance_data.get("SecurityGroups",""),
+        "Placement":instance_data.get("Placement",""),
+        "Architecture":instance_data.get("Architecture",""),
         }
         return response
 
-    def rds_image(self):
-        rds = '{"metrics": [["AWS/RDS", "CPUUtilization"]]}'
+    def rds_image(self,type_='cpu'):
+        if type_=="cpu":
+            rds = '{"metrics": [["AWS/RDS", "CPUUtilization"]]}'
+        elif type_=="storage":
+            rds = '{"metrics": [["AWS/RDS", "FreeStorageSpace"]]}'
+        elif type_=="memory":
+            rds = '{"metrics": [["AWS/RDS", "FreeableMemory"]]}'
         client = self.session.client('cloudwatch')
         response = client.get_metric_widget_image(MetricWidget=rds)
         # return response["MetricWidgetImage"]
@@ -179,24 +177,33 @@ class AwsService:
         all_regions=ess.describe_regions()
         list_region=[]
         response_data=[]
-        # for each_region in all_regions["Regions"]:
-        #     list_region.append(each_region["RegionName"])
         for instance in ess.describe_instances()["Reservations"]:
             for each_in in instance["Instances"]:
                 response_data.append(self.instance_output_format(each_in))
-
-        # for each_region in list_region:
-        #     resource= self.session.resource("ec2",region_name=each_region)
-        #     for each_instance in resource.instances.all():
-        #         print("each_instance",each_instance)
-        #         response_data.append({"Id":each_instance.id})
-        # client_=self.session.client("ec2",region_name=each_region)
-        # for each in client_.describe_instances()["Reservations"]:
-        #     for each_in in each["Instances"]:
-        #         print("each_in",each_in)
-        #     print("instanceId",each_in["InstanceId"],each_in["State"]["Name"])
         return response_data
-    
+
+    def ec2_state_stats(self):
+        stats = {
+            'pending': 0,
+            'running': 0,
+            'shutting-down': 0,
+            'terminated': 0,
+            'stopping': 0,
+            'stopped': 0
+            }
+        ec2_instance = self.session.client('ec2')
+        qs_ = ec2_instance.get_paginator('describe_instances')
+        response_ = qs_.paginate()
+        for rs in response_:
+            for reservation in rs['Reservations']:
+                for instance in reservation['Instances']:
+                    state = instance['State']['Name']
+                    stats[state] += 1
+        graph_data=[]
+        for i in stats.keys():
+            graph_data.append({"key":i,"value":int(stats[i])})
+        return graph_data
+            
     def ec2_runing_instance(self):
         ess=self.session.resource("ec2")
         filters = [{
@@ -210,15 +217,29 @@ class AwsService:
             RunningInstances.append(instance.id)
         return RunningInstances
         
-    def ec2_graph(self):
+    def ec2_graph(self,type_="cpu"):
+        instance_list=[]
+        instance_image_list=[]
+        data=[]
+        ec2_li=self.ec2_list()
+        instance_ids=[i["InstanceId"] for i in ec2_li]
         client = self.session.client('cloudwatch')
-        json = '{"metrics": [["AWS/EC2", "CPUUtilization", "InstanceId", \
-                      "i-0f9b0d57300e87d3c"]]}'
-        response = client.get_metric_widget_image(MetricWidget=json)
+        for ins in instance_ids:
+            if type_=="cpu":
+                data.append(["AWS/EC2", "CPUUtilization", "InstanceId",str(ins)])
+            elif type_=="in":
+                data.append(["AWS/EC2", "NetworkIn", "InstanceId",str(ins)])
+            elif type_=="out":
+                data.append(["AWS/EC2", "NetworkOut", "InstanceId",str(ins)])
+            elif type_=="pin":
+                data.append(["AWS/EC2", "NetworkPacketsIn", "InstanceId",str(ins)])
+            filter_data={"metrics":data}
+
+
+
+        response = client.get_metric_widget_image(MetricWidget=json.dumps(filter_data))
         bytes_data=io.BytesIO(response["MetricWidgetImage"])
         fr=base64.b64encode(bytes_data.getvalue())
-        # im = Image.open(io.BytesIO(response["MetricWidgetImage"]))
-        # im.save("cw-1.png")
         return fr
 
 

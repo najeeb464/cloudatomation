@@ -14,12 +14,62 @@ from rest_framework import status
 from rest_framework.views import APIView
 from rest_framework.generics import ListAPIView
 from aws.service import AwsService
+
+from rest_framework.permissions import IsAuthenticated,AllowAny
+
 class AccountConfigurationView(ModelViewSet):
+    permission_classes = [IsAuthenticated]
     queryset=AccountConfiguration.objects.all().order_by("-id")
     serializer_class=AccountConfigurationSerializer
+    def destroy(self, request, *args, **kwargs):
+        obj=self.get_queryset()
+        if len(obj)<=1:
+            return Response({"detail":"You must atleast one account configure"},status=status.HTTP_400_BAD_REQUEST)
 
+        instance = self.get_object()
+        if instance.is_default==True:
+            return Response({"detail":"You must atleast one default  acoount"},status=status.HTTP_400_BAD_REQUEST)
+        self.perform_destroy(instance)
+        # qs=AccountConfiguration.objects.all()
+        # print("qs",qs)
+        
+        # if qs.count()==1:
+        #     qs.first().is_default=True
+        #     qs.first().save()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+class ChangeAccountStatus(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self,*args,**kwargs):
+        account_id=self.kwargs.get("account_id")
+        try:
+            qs=AccountConfiguration.objects.all()
+            for i in qs:
+                i.is_default=False
+                i.save()
+            ac=AccountConfiguration.objects.get(id=account_id)
+            ac.is_default=True
+            ac.save()
+            return Response({},status=status.HTTP_200_OK)
+        except:
+            return Response({"error":"Invalid Account Configure"},status=status.HTTP_400_BAD_REQUEST)
+
+
+class AccountStatus(APIView):
+    permission_classes = [AllowAny]
+    def get(self, request):
+        qs=AccountConfiguration.objects.all()
+        if qs.exists():
+            flagObj=qs.filter(is_default=True)
+            if flagObj.exists():
+                return Response({"aws_id":flagObj.first().id,"user_id":flagObj.first().user_id,"user_name":flagObj.first().user_name},status=status.HTTP_200_OK)
+            return Response({"aws_id":qs.first().id,"user_id":qs.first().user_id,"user_name":qs.first().user_name},status=status.HTTP_200_OK)
+
+        else:
+            return Response({},status=status.HTTP_400_BAD_REQUEST)
 
 class UserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request):
         items = AccountConfiguration.objects.all()
         data=[]
@@ -31,8 +81,8 @@ class UserProfileView(APIView):
 
 
 class S3ListView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self,*args,**kwargs):
-        print("kwargs",kwargs)
         account_id=kwargs.get("account_id",None)
         try:
             item = AccountConfiguration.objects.get(id=account_id)
@@ -51,6 +101,7 @@ class S3ListView(APIView):
 
 
 class S3ObjectListView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request,*args,**kwargs):
         bucket_name=kwargs.get("bucket_name",None)
         account_id=kwargs.get("account_id",None)
@@ -66,6 +117,7 @@ class S3ObjectListView(APIView):
         return Response(data)
 
 class RDSListView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request,*args,**kwargs):
         account_id=kwargs.get("account_id",None)
         try:
@@ -78,6 +130,7 @@ class RDSListView(APIView):
             "rds_list":s.list_rds(),"rds_image":s.rds_image()})
         return Response(data)
 class RDSDetailView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request,*args,**kwargs):
         instance_arn=kwargs.get("instance_arn",None)
         account_id=kwargs.get("account_id",None)
@@ -93,6 +146,7 @@ class RDSDetailView(APIView):
         
 
 class EC2ListView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request,*args,**kwargs):
         account_id=kwargs.get("account_id",None)
         try:
@@ -105,6 +159,7 @@ class EC2ListView(APIView):
             "ec2_list":s.ec2_list(),"image":s.ec2_graph()})
         return Response(data)
 class EC2Stop(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request,*args,**kwargs):
         account_id=kwargs.get("account_id",None)
         instance_id=kwargs.get("instance_id",None)
@@ -121,6 +176,7 @@ class EC2Stop(APIView):
             return Response({"flag":False},status=status.HTTP_400_BAD_REQUEST)
 
 class EC2Start(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request,*args,**kwargs):
         account_id=kwargs.get("account_id",None)
         instance_id=kwargs.get("instance_id",None)
@@ -137,8 +193,10 @@ class EC2Start(APIView):
             return Response({"flag":False},status=status.HTTP_400_BAD_REQUEST)
 
 class EC2GraphView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request,*args,**kwargs):
         account_id=kwargs.get("account_id",None)
+        graph_type = self.request.query_params.get('graphtype',"cpu")
         try:
             item = AccountConfiguration.objects.get(id=account_id)
         except Exception as ex:
@@ -146,12 +204,15 @@ class EC2GraphView(APIView):
         data=[]
         s=AwsService(access_key=item.access_key,secret_access_key=item.secret_access_key,region_name="us-east-1")
         data.append({"profile_name":item.user_name,
-        "image":s.ec2_graph()})
+        "image":s.ec2_graph(type_=graph_type)})
         return Response(data)
 
 class RDSGraphView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request,*args,**kwargs):
         account_id=kwargs.get("account_id",None)
+        graph_type = self.request.query_params.get('graphtype',"cpu")
+
         try:
             item = AccountConfiguration.objects.get(id=account_id)
         except Exception as ex:
@@ -159,10 +220,11 @@ class RDSGraphView(APIView):
         data=[]
         s=AwsService(access_key=item.access_key,secret_access_key=item.secret_access_key,region_name="us-east-1")
         data.append({"profile_name":item.user_name,
-        "image":s.rds_image()})
+        "image":s.rds_image(type_=graph_type)})
         return Response(data)
 
 class S3StatsView(APIView):
+    permission_classes = [IsAuthenticated]
     def get(self, request,*args,**kwargs):
         account_id=kwargs.get("account_id",None)
         try:
@@ -173,4 +235,18 @@ class S3StatsView(APIView):
         s=AwsService(access_key=item.access_key,secret_access_key=item.secret_access_key,region_name="us-east-1")
         data.append({"profile_name":item.user_name,
         "stast":s.s3_stats()})
+        return Response(data)
+
+class EC2StateStatsView(APIView):
+    permission_classes = [IsAuthenticated]
+    def get(self, request,*args,**kwargs):
+        account_id=kwargs.get("account_id",None)
+        try:
+            item = AccountConfiguration.objects.get(id=account_id)
+        except Exception as ex:
+            return Response({"error":"Invalid Account Configure"},status=status.HTTP_400_BAD_REQUEST)
+        data=[]
+        s=AwsService(access_key=item.access_key,secret_access_key=item.secret_access_key,region_name="us-east-1")
+        data.append({"profile_name":item.user_name,
+        "stast":s.ec2_state_stats()})
         return Response(data)

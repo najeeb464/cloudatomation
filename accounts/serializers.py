@@ -3,11 +3,13 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework import serializers
 # from django.contrib.auth.models import User
 from accounts.models import User
+from aws.models import AccountConfiguration
 class SignInSerializer(serializers.ModelSerializer):
     email               =serializers.EmailField(required=True)
     password            =serializers.CharField(required=True,write_only=True)
     access              =serializers.CharField(read_only=True)
     refresh             =serializers.CharField(read_only=True)
+    # configure_account=serializers.DictField(child=serializers.CharField(),read_only=True)
 
 
     class Meta:
@@ -28,9 +30,16 @@ class SignInSerializer(serializers.ModelSerializer):
         if user_Obj and user_Obj.check_password(attrs.get('password')):
             if user_Obj.is_active:
                 token=RefreshToken.for_user(user_Obj)
+                # ac=AccountConfiguration.objects.all().first()
+                
+                # data={}
+                # if ac:
+                #     data["aws_user"]=ac.user_name
+                #     data["aws_id"]=ac.id
                 attrs['access']=str(token.access_token)
                 attrs['refresh']=str(token)
                 attrs['name']=user_Obj.name
+                # attrs["configure_account"]=data
                 return attrs
             else:
                 raise serializers.ValidationError({"user":"Your account status is Inactive"})
@@ -59,3 +68,7 @@ class SignUpSerializer(serializers.ModelSerializer):
         user.save()
         return user
 
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model=User
+        fields=["email","name","is_active"]
